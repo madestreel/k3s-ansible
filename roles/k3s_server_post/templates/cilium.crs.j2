@@ -33,16 +33,27 @@ spec: # CiliumBGPPeeringPolicySpec
    serviceSelector:
       matchExpressions:
          - {key: somekey, operator: NotIn, values: ['never-used-value']}
+
+{% for pool in cilium_bgp_lb_pools %}
 ---
 apiVersion: "cilium.io/v2alpha1"
 kind: CiliumLoadBalancerIPPool
 metadata:
-  name: "01-lb-pool"
+  name: "{{ pool.name }}"
 spec:
   blocks:
-{% if "/" in cilium_bgp_lb_cidr %}
-  - cidr: {{ cilium_bgp_lb_cidr }}
-{% else %}
-  - start: {{ cilium_bgp_lb_cidr.split('-')[0] }}
-    stop: {{ cilium_bgp_lb_cidr.split('-')[1] }}
-{% endif %}
+  {% if "/" in pool.cidr %}
+  - cidr: {{ pool.cidr }}
+  {% else %}
+  - start: {{ pool.cidr.split('-')[0] }}
+    stop: {{ pool.cidr.split('-')[1] }}
+  {% endif %}
+
+  {% if pool.serviceSelector is defined %}
+  serviceSelector:
+    matchLabels:
+    {% for key, value in pool.serviceSelector.matchLabels.items() %}
+      {{ key }}: {{ value }}
+    {% endfor %}
+  {% endif %}
+{% endfor %}
