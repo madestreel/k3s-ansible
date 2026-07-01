@@ -261,7 +261,9 @@
         - name: Test for BGP config resources
           ansible.builtin.command: "{{ item }}"
           loop:
-            - "{{ k3s_kubectl_binary | default('k3s kubectl') }} get CiliumBGPPeeringPolicy.cilium.io"
+            - "{{ k3s_kubectl_binary | default('k3s kubectl') }} get CiliumBGPPeerConfig.cilium.io"
+            - "{{ k3s_kubectl_binary | default('k3s kubectl') }} get CiliumBGPClusterConfig.cilium.io"
+            - "{{ k3s_kubectl_binary | default('k3s kubectl') }} get CiliumBGPAdvertisement.cilium.io"
             - "{{ k3s_kubectl_binary | default('k3s kubectl') }} get CiliumLoadBalancerIPPool.cilium.io"
           changed_when: false
           loop_control:
