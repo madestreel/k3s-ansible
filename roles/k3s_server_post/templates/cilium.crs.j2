@@ -1,39 +1,66 @@
+---
 apiVersion: "cilium.io/v2alpha1"
-kind: CiliumBGPPeeringPolicy
+kind: CiliumBGPPeerConfig
 metadata:
- name: 01-bgp-peering-policy
-spec: # CiliumBGPPeeringPolicySpec
- virtualRouters: # []CiliumBGPVirtualRouter
- - localASN: {{ cilium_bgp_my_asn }}
-   exportPodCIDR: {{ cilium_exportPodCIDR | default('true') }}
-   neighbors: # []CiliumBGPNeighbor
+  name: router-peer
+spec:
+  timers:
+    connectRetryTimeSeconds: 120
+    holdTimeSeconds: 90
+    keepAliveTimeSeconds: 30
+
+  ebgpMultihop:
+    ttl: 10
+
+  gracefulRestart:
+    enabled: true
+    restartTimeSeconds: 120
+
+---
+apiVersion: "cilium.io/v2alpha1"
+kind: CiliumBGPClusterConfig
+metadata:
+  name: cilium-bgp
+spec:
+  nodeSelector: {}
+
+  bgpInstances:
+  - name: default
+    localASN: {{ cilium_bgp_my_asn }}
+
+    peers:
 {% if _cilium_bgp_neighbors | length > 0 %}
 {% for item in _cilium_bgp_neighbors %}
-    - peerAddress: '{{ item.peer_address + "/32"}}'
+    - name: peer-{{ loop.index }}
+      peerAddress: "{{ item.peer_address }}"
       peerASN: {{ item.peer_asn }}
-      eBGPMultihopTTL: 10
-      connectRetryTimeSeconds: 120
-      holdTimeSeconds: 90
-      keepAliveTimeSeconds: 30
-      gracefulRestart:
-        enabled: true
-        restartTimeSeconds: 120
+      peerConfigRef:
+        name: router-peer
 {% endfor %}
 {% else %}
-    - peerAddress: '{{ cilium_bgp_peer_address + "/32"}}'
+    - name: router
+      peerAddress: "{{ cilium_bgp_peer_address }}"
       peerASN: {{ cilium_bgp_peer_asn }}
-      eBGPMultihopTTL: 10
-      connectRetryTimeSeconds: 120
-      holdTimeSeconds: 90
-      keepAliveTimeSeconds: 30
-      gracefulRestart:
-        enabled: true
-        restartTimeSeconds: 120
+      peerConfigRef:
+        name: router-peer
 {% endif %}
-   serviceSelector:
-      matchExpressions:
-         - {key: somekey, operator: NotIn, values: ['never-used-value']}
 
+---
+apiVersion: "cilium.io/v2alpha1"
+kind: CiliumBGPAdvertisement
+metadata:
+  name: default-advertisements
+spec:
+  advertisements:
+
+  # Equivalent to exportPodCIDR: true
+  - advertisementType: PodCIDR
+
+  # Equivalent to advertising LoadBalancer services
+  - advertisementType: Service
+    service:
+      addresses:
+      - LoadBalancerIP
 {% for pool in cilium_bgp_lb_pools %}
 ---
 apiVersion: "cilium.io/v2alpha1"

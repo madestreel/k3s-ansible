@@ -180,6 +180,9 @@
         --helm-set hubble.enabled={{ "true" if cilium_hubble else "false" }}
         --helm-set hubble.relay.enabled={{ "true" if cilium_hubble else "false" }}
         --helm-set hubble.ui.enabled={{ "true" if cilium_hubble else "false" }}
+        {% if cilium_gatewayapi_enabled %}
+        --helm-set gatewayAPI.enabled=true
+        {$ endif %}
         {% if kube_proxy_replacement is not false %}
         --helm-set bpf.loadBalancer.algorithm={{ bpf_lb_algorithm }}
         --helm-set bpf.loadBalancer.mode={{ bpf_lb_mode }}
@@ -213,17 +216,26 @@
         - { name: cilium, type: daemonset, selector: k8s-app=cilium }
         - { name: hubble-relay, type: deployment, check_hubble: true }
         - { name: hubble-ui, type: deployment, check_hubble: true }
+        - { name: cilium-envoy, type: daemonset, check_gateway: true }
       loop_control:
         label: "{{ item.type }}/{{ item.name }}"
       when: >-
-        not item.check_hubble | default(false) or (item.check_hubble | default(false) and cilium_hubble)
+        (
+          not item.check_hubble | default(false)
+          or (item.check_hubble | default(false) and cilium_hubble)
+        )
+        and
+        (
+          not item.check_gateway | default(false)
+          or (item.check_gateway | default(false) and cilium_gateway_api)
+        )
 
     - name: Configure Cilium BGP
       when: cilium_bgp
       block:
         - name: Set _cilium_bgp_neighbors fact
           ansible.builtin.set_fact:
-            _cilium_bgp_neighbors: "{{ lookup('community.general.merge_variables', '^cilium_bgp_neighbors__.+$', initial_value=cilium_bgp_neighbors, groups=cilium_bgp_neighbors_groups) }}"  # yamllint disable-line rule:line-length
+            _cilium_bgp_neighbors: "{{ lookup('community.general.merge_variables', '^cilium_bgp_neighbors__.+$', initial_value=cilium_bgp_neighbors, groups=cilium_bgp_neighbors_groups) }}" # yamllint disable-line rule:line-length
 
         - name: Copy BGP manifests to first master
           ansible.builtin.template:
