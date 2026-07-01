@@ -155,6 +155,28 @@
               Installed Cilium version: {{ installed_cilium_version }},
               Target Cilium version: {{ cilium_tag }},
               Update needed: {{ cilium_needs_update }}
+    - name: Install Gateway API CRDs
+      ansible.builtin.command:
+        cmd: >-
+          {{ k3s_kubectl_binary | default('k3s kubectl') }}
+          apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/{{ cilium_gatewayapi_crd_version }}/standard-install.yaml
+      environment:
+        KUBECONFIG: "{{ ansible_user_dir }}/.kube/config"
+      register: gateway_api_crds
+      changed_when: "'created' in gateway_api_crds.stdout or 'configured' in gateway_api_crds.stdout"
+      when: cilium_gatewayapi_enabled
+
+    - name: Test for BGP config resources
+      ansible.builtin.command: "{{ item }}"
+      loop:
+        - "{{ k3s_kubectl_binary | default('k3s kubectl') }} get gateways.gateway.networking.k8s.io"
+        - "{{ k3s_kubectl_binary | default('k3s kubectl') }} get gatewayclasses.gateway.networking.k8s.io"
+        - "{{ k3s_kubectl_binary | default('k3s kubectl') }} get httproutes.gateway.networking.k8s.io"
+        - "{{ k3s_kubectl_binary | default('k3s kubectl') }} get referencegrants.gateway.networking.k8s.io"
+      changed_when: false
+      loop_control:
+        label: "{{ item }}"
+      when: cilium_gatewayapi_enabled
 
     - name: Install Cilium
       ansible.builtin.command: >-
@@ -181,8 +203,8 @@
         --helm-set hubble.relay.enabled={{ "true" if cilium_hubble else "false" }}
         --helm-set hubble.ui.enabled={{ "true" if cilium_hubble else "false" }}
         {% if cilium_gatewayapi_enabled %}
-        --helm-set gatewayAPI.enabled=true
-        {$ endif %}
+        --helm-set gatewayAPI.enabled="true"
+        {% endif %}
         {% if kube_proxy_replacement is not false %}
         --helm-set bpf.loadBalancer.algorithm={{ bpf_lb_algorithm }}
         --helm-set bpf.loadBalancer.mode={{ bpf_lb_mode }}
@@ -191,7 +213,6 @@
         KUBECONFIG: "{{ ansible_user_dir }}/.kube/config"
       register: cilium_install_result
       changed_when: cilium_install_result.rc == 0
-      when: cilium_installed.rc != 0 or cilium_needs_update
 
     - name: Wait for Cilium resources
       ansible.builtin.command: >-

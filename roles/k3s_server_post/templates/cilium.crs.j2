@@ -1,5 +1,5 @@
 ---
-apiVersion: "cilium.io/v2alpha1"
+apiVersion: "cilium.io/v2"
 kind: CiliumBGPPeerConfig
 metadata:
   name: router-peer
@@ -9,15 +9,18 @@ spec:
     holdTimeSeconds: 90
     keepAliveTimeSeconds: 30
 
-  ebgpMultihop:
-    ttl: 10
-
   gracefulRestart:
     enabled: true
     restartTimeSeconds: 120
+  families:
+  - advertisements:
+      matchLabels:
+        advertise: bgp
+    afi: ipv4
+    safi: unicast
 
 ---
-apiVersion: "cilium.io/v2alpha1"
+apiVersion: "cilium.io/v2"
 kind: CiliumBGPClusterConfig
 metadata:
   name: cilium-bgp
@@ -46,41 +49,39 @@ spec:
 {% endif %}
 
 ---
-apiVersion: "cilium.io/v2alpha1"
+apiVersion: "cilium.io/v2"
 kind: CiliumBGPAdvertisement
 metadata:
   name: default-advertisements
+  labels:
+    advertise: bgp
 spec:
   advertisements:
-
-  # Equivalent to exportPodCIDR: true
-  - advertisementType: PodCIDR
-
-  # Equivalent to advertising LoadBalancer services
   - advertisementType: Service
     service:
       addresses:
       - LoadBalancerIP
+
 {% for pool in cilium_bgp_lb_pools %}
 ---
-apiVersion: "cilium.io/v2alpha1"
+apiVersion: "cilium.io/v2"
 kind: CiliumLoadBalancerIPPool
 metadata:
   name: "{{ pool.name }}"
 spec:
   blocks:
-  {% if "/" in pool.cidr %}
-  - cidr: {{ pool.cidr }}
-  {% else %}
-  - start: {{ pool.cidr.split('-')[0] }}
-    stop: {{ pool.cidr.split('-')[1] }}
-  {% endif %}
-
-  {% if pool.serviceSelector is defined %}
+{% if "/" in pool.cidr %}
+    - cidr: {{ pool.cidr }}
+{% else %}
+    - start: {{ pool.cidr.split('-')[0] }}
+      stop: {{ pool.cidr.split('-')[1] }}
+{% endif %}
+{% if pool.serviceSelector is defined %}
   serviceSelector:
     matchLabels:
-    {% for key, value in pool.serviceSelector.matchLabels.items() %}
+{% for key, value in pool.serviceSelector.matchLabels.items() %}
       {{ key }}: {{ value }}
-    {% endfor %}
-  {% endif %}
 {% endfor %}
+{% endif %}
+{% endfor %}
+
