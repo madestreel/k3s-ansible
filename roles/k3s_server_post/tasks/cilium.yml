@@ -227,7 +227,7 @@
         and
         (
           not item.check_gateway | default(false)
-          or (item.check_gateway | default(false) and cilium_gateway_api)
+          or (item.check_gateway | default(false) and cilium_gatewayapi_enabled)
         )
 
     - name: Configure Cilium BGP
